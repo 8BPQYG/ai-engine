@@ -25,6 +25,8 @@
         .node-header { font-size: 0.8rem; font-weight: bold; color: #00e676; background: #1a1a1e; padding: 8px 12px; border-bottom: 1px solid #29292e; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; }
         .node-body { font-size: 0.85rem; color: #c4c4cc; padding: 12px; }
         .delete-btn { color: #ef5350; cursor: pointer; }
+        /* Stops dragging from breaking when highlighting editable text items inside nodes */
+        [contenteditable="true"] { cursor: text; user-select: text; outline: none; }
     </style>
 </head>
 <body>
@@ -41,7 +43,7 @@
             <div class="ai-row"><span>DeepSeek R1</span> <div class="status-dot"></div></div>
             <div class="ai-row"><span>xAI Grok</span> <div class="status-dot"></div></div>
         </div>
-        <div class="terminal-box" id="terminalLog">[SYSTEM]: Engine ready. Drag nodes or type to manifest modules.</div>
+        <div class="terminal-box" id="terminalLog">[SYSTEM]: Engine live. Drag nodes, or click ANY text inside them to rename/edit variables directly on the canvas!</div>
         <div class="prompt-container">
             <textarea id="promptInput" placeholder="Describe a new software feature node..."></textarea>
             <button onclick="triggerEngineOrchestration()">Run Orchestrator</button>
@@ -52,8 +54,8 @@
         <div class="engine-bar"><span style="font-weight: bold; font-size: 0.9rem;">Workspace: Active Blueprint Project</span></div>
         <div class="canvas-area" id="canvasArea">
             <div class="node" style="top: 150px; left: 150px;" onmousedown="startDrag(event, this)">
-                <div class="node-header"><span>Engine.Core_Main</span></div>
-                <div class="node-body"><strong>Status:</strong> Online<br><strong>Pipeline:</strong> Root Link</div>
+                <div class="node-header"><span contenteditable="true">Engine.Core_Main</span></div>
+                <div class="node-body" contenteditable="true">Click here to write properties or engine variable declarations live...</div>
             </div>
         </div>
     </div>
@@ -62,7 +64,9 @@
         let activeElement = null, startX = 0, startY = 0;
 
         function startDrag(e, element) {
-            if (e.target.classList.contains('delete-btn')) return;
+            // CRITICAL FIX: If user clicks to type/edit text, safely freeze dragging so it doesn't fight the mouse cursor cursor
+            if (e.target.hasAttribute('contenteditable') || e.target.classList.contains('delete-btn')) return;
+            
             activeElement = element;
             startX = e.clientX - element.offsetLeft;
             startY = e.clientY - element.offsetTop;
@@ -99,12 +103,13 @@
                 node.style.left = Math.floor(Math.random() * 200 + 350) + 'px';
                 node.setAttribute('onmousedown', 'startDrag(event, this)');
                 
+                // Injecting contenteditable directly inside header spans and bodies for robust editing mechanics
                 node.innerHTML = `
                     <div class="node-header">
-                        <span>AI_${input.value.substring(0, 15)}</span>
+                        <span contenteditable="true">AI_${input.value.substring(0, 15)}</span>
                         <span class="delete-btn" onclick="this.closest('.node').remove()">×</span>
                     </div>
-                    <div class="node-body"><strong>Module:</strong> Pipeline Link Active.</div>
+                    <div class="node-body" contenteditable="true">Click here to rename fields, inject values, or construct structural parameters.</div>
                 `;
                 canvas.appendChild(node);
                 input.value = '';
