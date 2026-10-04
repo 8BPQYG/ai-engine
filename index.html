@@ -1,168 +1,180 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Orchestrator Engine</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background: #121214; color: #e1e1e6; display: flex; height: 100vh; overflow: hidden; user-select: none; }
+<script>
+    let currentElement = null;
+    let offsetX = 0;
+    let offsetY = 0;
+    let selectedNodeId = 'rootNode';
+
+    // Keeps track of the custom code inside each engine node block
+    let nodeDataStorage = {
+        'rootNode': '// Core runtime initiation logic\nfunction startEngine() {\n    console.log("Core initialized.");\n}'
+    };
+
+    function startDrag(e, element) {
+        if (
+            e.target.hasAttribute('contenteditable') ||
+            e.target.classList.contains('delete-btn')
+        ) {
+            return;
+        }
+
+        currentElement = element;
+
+        offsetX = e.clientX - element.getBoundingClientRect().left;
+        offsetY = e.clientY - element.getBoundingClientRect().top;
+
+        // --- INSPECTOR PANEL ACTIVE CONNECTIVITY ---
+        selectedNodeId = element.id || 'rootNode';
+        document.querySelectorAll('.node').forEach(n => n.style.borderColor = '#00e676');
+        element.style.borderColor = '#ffffff'; // White highlight for selected node
         
-        /* Sidebar Panel (AI Control Center) */
-        .sidebar { width: 350px; background: #1a1a1e; border-right: 1px solid #29292e; display: flex; flex-direction: column; z-index: 10; }
-        .panel-header { padding: 20px; border-bottom: 1px solid #29292e; }
-        .panel-header h2 { font-size: 1.2rem; color: #00e676; }
-        
-        .ai-status-list { padding: 20px; flex: 1; overflow-y: auto; }
-        .ai-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.9rem; }
-        .status-dot { width: 8px; height: 8px; background: #555; border-radius: 50%; }
-        .status-dot.active { background: #00e676; box-shadow: 0 0 8px #00e676; }
+        // Push the clicked node's title and inner code to the right panel
+        document.getElementById('inspectorName').value = element.querySelector('.node-header span').innerText;
+        document.getElementById('inspectorCode').innerText = nodeDataStorage[selectedNodeId] || '// No custom script initialized.';
+        // -------------------------------------------
 
-        .terminal-box { background: #0a0a0c; padding: 15px; border-radius: 6px; height: 180px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; color: #a9a9b3; border: 1px solid #29292e; margin: 20px; }
+        document.addEventListener('mousemove', dragEverything);
+        document.addEventListener('mouseup', stopDragEverything);
+    }
 
-        .prompt-container { padding: 20px; border-top: 1px solid #29292e; background: #1a1a1e; }
-        textarea { width: 100%; height: 80px; background: #202024; border: 1px solid #29292e; border-radius: 6px; color: #fff; padding: 10px; resize: none; outline: none; font-size: 0.9rem; }
-        textarea:focus { border-color: #00e676; }
-        button { width: 100%; padding: 12px; margin-top: 10px; background: #00e676; border: none; border-radius: 6px; color: #0a0a0c; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #00b359; }
+    function dragEverything(e) {
+        if (!currentElement) return;
 
-        /* Main Viewport (Visual Workspace Like Unity/Godot) */
-        .main-viewport { flex: 1; display: flex; flex-direction: column; position: relative; }
-        .engine-bar { height: 50px; background: #1a1a1e; border-bottom: 1px solid #29292e; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
-        .canvas-area { flex: 1; background-image: radial-gradient(#29292e 1px, transparent 1px); background-size: 20px 20px; position: relative; overflow: hidden; }
-        
-        /* Interactive Dragging Blueprint Node */
-        .node { position: absolute; background: #202024; border: 2px solid #00e676; border-radius: 8px; width: 220px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: grab; }
-        .node:active { cursor: grabbing; border-color: #ffffff; }
-        .node-header { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; color: #00e676; background: #1a1a1e; padding: 8px 12px; border-bottom: 1px solid #29292e; border-top-left-radius: 6px; border-top-right-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .node-body { font-size: 0.85rem; color: #c4c4cc; line-height: 1.4; padding: 12px; }
-        .delete-btn { color: #ef5350; cursor: pointer; font-weight: bold; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
+        const container = document
+            .getElementById('canvasArea')
+            .getBoundingClientRect();
 
-    <div class="sidebar">
-        <div class="panel-header">
-            <h2>AI ENGINE CORE</h2>
-            <p style="font-size: 0.8rem; color: #7c7c8a;">Multi-Agent Consensus Layer</p>
-        </div>
-        
-        <div class="ai-status-list">
-            <p style="font-size: 0.8rem; font-weight: bold; margin-bottom: 15px; color: #7c7c8a;">TARGET MODELS</p>
-            <div class="ai-row"><span>OpenAI GPT-4o</span> <div class="status-dot active"></div></div>
-            <div class="ai-row"><span>Anthropic Claude 3.5</span> <div class="status-dot active"></div></div>
-            <div class="ai-row"><span>Google Gemini 1.5</span> <div class="status-dot active"></div></div>
-            <div class="ai-row"><span>DeepSeek R1</span> <div class="status-dot active"></div></div>
-            <div class="ai-row"><span>xAI Grok</span> <div class="status-dot active"></div></div>
-        </div>
+        const leftPosition = e.clientX - container.left - offsetX;
+        const topPosition = e.clientY - container.top - offsetY;
 
-        <div class="terminal-box" id="terminalLog">
-            [SYSTEM]: Engine sandbox ready.<br>
-            [HELP]: Click and drag nodes inside the canvas! Double click content text fields to edit them live.
-        </div>
+        currentElement.style.left = leftPosition + 'px';
+        currentElement.style.top = topPosition + 'px';
 
-        <div class="prompt-container">
-            <textarea id="promptInput" placeholder="Describe a new software feature node to manifest..."></textarea>
-            <button onclick="triggerEngineOrchestration()">Run Orchestrator</button>
-        </div>
-    </div>
+        updateConnections();
+    }
 
-    <div class="main-viewport">
-        <div class="engine-bar">
-            <span style="font-weight: bold; font-size: 0.9rem;">Workspace: Active Blueprint Project</span>
-            <span style="font-size: 0.8rem; background: #29292e; padding: 4px 8px; border-radius: 4px; color: #00e676;">Self-Modifying: ON</span>
-        </div>
-        
-        <div class="canvas-area" id="canvasArea">
-            <!-- Initial Drag-Capable Root Node -->
-            <div class="node" style="top: 150px; left: 150px;" onmousedown="startDrag(event, this)">
+    function stopDragEverything() {
+        currentElement = null;
+
+        document.removeEventListener('mousemove', dragEverything);
+        document.removeEventListener('mouseup', stopDragEverything);
+    }
+
+    function triggerEngineOrchestration() {
+        const inputText = document.getElementById('promptInput').value;
+        const log = document.getElementById('terminalLog');
+        const canvas = document.getElementById('canvasArea');
+
+        if (!inputText.trim()) {
+            return alert('Please type a feature component name!');
+        }
+
+        log.innerHTML += `<br><span style="color: #00e676;">[USER]: ${inputText}</span>`;
+        log.innerHTML += `<br>[SYSTEM]: Spawning linked blueprint node...`;
+        log.scrollTop = log.scrollHeight;
+
+        setTimeout(() => {
+            const nodeId = 'node_' + Date.now();
+
+            const newNode = document.createElement('div');
+            newNode.className = 'node';
+            newNode.id = nodeId;
+
+            const randomTop = Math.floor(Math.random() * 250 + 100);
+            const randomLeft = Math.floor(Math.random() * 250 + 400);
+
+            newNode.style.top = randomTop + 'px';
+            newNode.style.left = randomLeft + 'px';
+            newNode.setAttribute('onmousedown', 'startDrag(event, this)');
+
+            const nodeTitle = inputText.length > 15 ? inputText.substring(0, 15) + '...' : inputText;
+
+            newNode.innerHTML = `
                 <div class="node-header">
-                    <span>Engine.Core_Main</span>
+                    <span>AI_${nodeTitle}</span>
+                    <span class="delete-btn" onclick="removeNode('${nodeId}')">×</span>
                 </div>
-                <div class="node-body" contenteditable="true">
-                    <strong>Status:</strong> Ready<br>
-                    <strong>Mode:</strong> Drag Context
-                </div>
-            </div>
-        </div>
-    </div>
+                <div class="node-body">Pipeline component active.</div>
+            `;
 
-    <script>
-        let currentElement = null;
-        let offsetX = 0;
-        let offsetY = 0;
+            // Auto-generates starter code for your new node
+            nodeDataStorage[nodeId] = '// AI Compiled Script for ' + inputText + '\nfunction execute' + nodeTitle.replace(/[^a-zA-Z0-9]/g, '') + '() {\n    // System parameters ready\n}';
 
-        function startDrag(e, element) {
-            // Block drag actions if the user is explicitly trying to edit text fields inside
-            if (e.target.hasAttribute('contenteditable') || e.target.classList.contains('delete-btn')) return;
-            
-            currentElement = element;
-            offsetX = e.clientX - element.getBoundingClientRect().left;
-            offsetY = e.clientY - element.getBoundingClientRect().top;
-            document.addEventListener('mousemove', dragEverything);
-            document.addEventListener('mouseup', stopDragEverything);
-        }
+            canvas.appendChild(newNode);
+            document.getElementById('promptInput').value = '';
 
-        function dragEverything(e) {
-            if (!currentElement) return;
-            const canvas = document.getElementById('canvasArea').getBoundingClientRect();
-            
-            let leftPosition = e.clientX - canvas.left - offsetX;
-            let topPosition = e.clientY - canvas.top - offsetY;
-            
-            currentElement.style.left = leftPosition + 'px';
-            currentElement.style.top = topPosition + 'px';
-        }
-
-        function stopDragEverything() {
-            currentElement = null;
-            document.removeEventListener('mousemove', dragEverything);
-            document.removeEventListener('mouseup', stopDragEverything);
-        }
-
-        function triggerEngineOrchestration() {
-            const inputText = document.getElementById('promptInput').value;
-            const log = document.getElementById('terminalLog');
-            const canvas = document.getElementById('canvasArea');
-            
-            if(!inputText.trim()) return alert("Please type a core component name or feature description!");
-
-            log.innerHTML += `<br><span style="color: #00e676;">[USER]: ${inputText}</span>`;
-            log.innerHTML += `<br>[SYSTEM]: Spawning interactive block module...`;
+            log.innerHTML += `<br>[COMPILER]: Connected to Core pipeline successfully.`;
             log.scrollTop = log.scrollHeight;
 
-            setTimeout(() => {
-                const newNode = document.createElement('div');
-                newNode.className = 'node';
-                
-                // Spawn items relative to random central cluster coordinates
-                const randomTop = Math.floor(Math.random() * 250 + 100);
-                const randomLeft = Math.floor(Math.random() * 300 + 100);
-                
-                newNode.style.top = randomTop + 'px';
-                newNode.style.left = randomLeft + 'px';
-                newNode.setAttribute('onmousedown', 'startDrag(event, this)');
-                
-                // Truncate naming for node header title visual layout safety
-                const nodeTitle = inputText.length > 15 ? inputText.substring(0, 15) + '...' : inputText;
+            updateConnections();
+        }, 500);
+    }
 
-                newNode.innerHTML = `
-                    <div class="node-header">
-                        <span>AI_${nodeTitle}</span>
-                        <span class="delete-btn" onclick="this.closest('.node').remove()">×</span>
-                    </div>
-                    <div class="node-body" contenteditable="true">
-                        <strong>Feature Type:</strong> Custom Node<br>
-                        <em>Click here to edit descriptions or code strings.</em>
-                    </div>
-                `;
-                
-                canvas.appendChild(newNode);
-                document.getElementById('promptInput').value = '';
-                log.innerHTML += `<br>[COMPILER]: Node deployed successfully.`;
-                log.scrollTop = log.scrollHeight;
-            }, 600);
+    function updateConnections() {
+        const svg = document.getElementById('lineLayer');
+        const canvas = document.getElementById('canvasArea');
+        const root = document.getElementById('rootNode');
+
+        svg.innerHTML = '';
+
+        if (!root) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const rootRect = root.getBoundingClientRect();
+
+        const startX = rootRect.left - canvasRect.left + rootRect.width;
+        const startY = rootRect.top - canvasRect.top + rootRect.height / 2;
+
+        const targetNodes = document.querySelectorAll('.node:not(#rootNode)');
+
+        targetNodes.forEach(node => {
+            const nodeRect = node.getBoundingClientRect();
+
+            const endX = nodeRect.left - canvasRect.left;
+            const endY = nodeRect.top - canvasRect.top + nodeRect.height / 2;
+
+            const controlOffset = Math.abs(endX - startX) * 0.5;
+
+            const pathData =
+                `M ${startX} ${startY} ` +
+                `C ${startX + controlOffset} ${startY}, ` +
+                `${endX - controlOffset} ${endY}, ` +
+                `${endX} ${endY}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+            path.setAttribute('d', pathData);
+            path.setAttribute('stroke', '#00e676');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', 'none');
+            path.setAttribute('style', 'opacity: 0.65; stroke-dasharray: 4;');
+
+            svg.appendChild(path);
+        });
+    }
+
+    function removeNode(id) {
+        const element = document.getElementById(id);
+
+        if (element) {
+            element.remove();
+            delete nodeDataStorage[id]; // Cleans up the code memory database
+            updateConnections();
         }
-    </script>
-</body>
-</html>
+    }
+
+    // Connects inspector text typing to update the canvas labels dynamically
+    function updateSelectedNodeName(val) {
+        if (!selectedNodeId) return;
+        const target = document.getElementById(selectedNodeId);
+        if (target) target.querySelector('.node-header span').innerText = val;
+    }
+
+    function updateSelectedNodeCode(val) {
+        if (!selectedNodeId) return;
+        nodeDataStorage[selectedNodeId] = val;
+    }
+
+    window.addEventListener('resize', updateConnections);
+</script>
+
+            
