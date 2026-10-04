@@ -6,7 +6,7 @@
     <title>AI Orchestrator Engine</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background: #121214; color: #e1e1e6; display: flex; height: 100vh; overflow: hidden; }
+        body { background: #121214; color: #e1e1e6; display: flex; height: 100vh; overflow: hidden; user-select: none; }
         
         /* Sidebar Panel (AI Control Center) */
         .sidebar { width: 350px; background: #1a1a1e; border-right: 1px solid #29292e; display: flex; flex-direction: column; z-index: 10; }
@@ -29,12 +29,14 @@
         /* Main Viewport (Visual Workspace Like Unity/Godot) */
         .main-viewport { flex: 1; display: flex; flex-direction: column; position: relative; }
         .engine-bar { height: 50px; background: #1a1a1e; border-bottom: 1px solid #29292e; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
-        .canvas-area { flex: 1; background-image: radial-gradient(#29292e 1px, transparent 1px); background-size: 20px 20px; position: relative; display: flex; align-items: center; justify-content: center; }
+        .canvas-area { flex: 1; background-image: radial-gradient(#29292e 1px, transparent 1px); background-size: 20px 20px; position: relative; overflow: hidden; }
         
-        /* Simulated Engine Blueprint Node */
-        .node { position: absolute; background: #202024; border: 2px solid #00e676; border-radius: 8px; width: 220px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-        .node-header { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; color: #00e676; border-bottom: 1px solid #29292e; padding-bottom: 6px; margin-bottom: 8px; }
-        .node-body { font-size: 0.85rem; color: #c4c4cc; line-height: 1.4; }
+        /* Interactive Dragging Blueprint Node */
+        .node { position: absolute; background: #202024; border: 2px solid #00e676; border-radius: 8px; width: 220px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: grab; }
+        .node:active { cursor: grabbing; border-color: #ffffff; }
+        .node-header { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; color: #00e676; background: #1a1a1e; padding: 8px 12px; border-bottom: 1px solid #29292e; border-top-left-radius: 6px; border-top-right-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .node-body { font-size: 0.85rem; color: #c4c4cc; line-height: 1.4; padding: 12px; }
+        .delete-btn { color: #ef5350; cursor: pointer; font-weight: bold; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -55,12 +57,12 @@
         </div>
 
         <div class="terminal-box" id="terminalLog">
-            [SYSTEM]: Engine initialized.<br>
-            [MEMORY]: Ready for user context storage...
+            [SYSTEM]: Engine sandbox ready.<br>
+            [HELP]: Click and drag nodes inside the canvas! Double click content text fields to edit them live.
         </div>
 
         <div class="prompt-container">
-            <textarea id="promptInput" placeholder="Describe how to morph this engine or build an app..."></textarea>
+            <textarea id="promptInput" placeholder="Describe a new software feature node to manifest..."></textarea>
             <button onclick="triggerEngineOrchestration()">Run Orchestrator</button>
         </div>
     </div>
@@ -72,47 +74,94 @@
         </div>
         
         <div class="canvas-area" id="canvasArea">
-            <div class="node" style="top: 30%; left: 35%;">
-                <div class="node-header">Engine.Core_Main</div>
-                <div class="node-body">
-                    <strong>Status:</strong> Awaiting AI Consensus<br>
-                    <strong>Build Mode:</strong> Web Runtime
+            <!-- Initial Drag-Capable Root Node -->
+            <div class="node" style="top: 150px; left: 150px;" onmousedown="startDrag(event, this)">
+                <div class="node-header">
+                    <span>Engine.Core_Main</span>
+                </div>
+                <div class="node-body" contenteditable="true">
+                    <strong>Status:</strong> Ready<br>
+                    <strong>Mode:</strong> Drag Context
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        let currentElement = null;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        function startDrag(e, element) {
+            // Block drag actions if the user is explicitly trying to edit text fields inside
+            if (e.target.hasAttribute('contenteditable') || e.target.classList.contains('delete-btn')) return;
+            
+            currentElement = element;
+            offsetX = e.clientX - element.getBoundingClientRect().left;
+            offsetY = e.clientY - element.getBoundingClientRect().top;
+            document.addEventListener('mousemove', dragEverything);
+            document.addEventListener('mouseup', stopDragEverything);
+        }
+
+        function dragEverything(e) {
+            if (!currentElement) return;
+            const canvas = document.getElementById('canvasArea').getBoundingClientRect();
+            
+            let leftPosition = e.clientX - canvas.left - offsetX;
+            let topPosition = e.clientY - canvas.top - offsetY;
+            
+            currentElement.style.left = leftPosition + 'px';
+            currentElement.style.top = topPosition + 'px';
+        }
+
+        function stopDragEverything() {
+            currentElement = null;
+            document.removeEventListener('mousemove', dragEverything);
+            document.removeEventListener('mouseup', stopDragEverything);
+        }
+
         function triggerEngineOrchestration() {
             const inputText = document.getElementById('promptInput').value;
             const log = document.getElementById('terminalLog');
             const canvas = document.getElementById('canvasArea');
             
-            if(!inputText.trim()) return alert("Please type an instruction first!");
+            if(!inputText.trim()) return alert("Please type a core component name or feature description!");
 
             log.innerHTML += `<br><span style="color: #00e676;">[USER]: ${inputText}</span>`;
-            log.innerHTML += `<br>[SYSTEM]: Routing prompt to 5 AIs simultaneously...`;
+            log.innerHTML += `<br>[SYSTEM]: Spawning interactive block module...`;
             log.scrollTop = log.scrollHeight;
 
             setTimeout(() => {
-                log.innerHTML += `<br>[AGGR]: Aggregating code logic models...`;
-                log.innerHTML += `<br>[COMPILER]: Successfully applied self-modification patch!`;
-                log.scrollTop = log.scrollHeight;
-
                 const newNode = document.createElement('div');
                 newNode.className = 'node';
-                newNode.style.top = Math.floor(Math.random() * 50 + 20) + '%';
-                newNode.style.left = Math.floor(Math.random() * 50 + 20) + '%';
+                
+                // Spawn items relative to random central cluster coordinates
+                const randomTop = Math.floor(Math.random() * 250 + 100);
+                const randomLeft = Math.floor(Math.random() * 300 + 100);
+                
+                newNode.style.top = randomTop + 'px';
+                newNode.style.left = randomLeft + 'px';
+                newNode.setAttribute('onmousedown', 'startDrag(event, this)');
+                
+                // Truncate naming for node header title visual layout safety
+                const nodeTitle = inputText.length > 15 ? inputText.substring(0, 15) + '...' : inputText;
+
                 newNode.innerHTML = `
-                    <div class="node-header">AI_Generated_Patch</div>
-                    <div class="node-body">
-                        <strong>Feature:</strong> Custom Object<br>
-                        <em>Consensus code applied to live web layout.</em>
+                    <div class="node-header">
+                        <span>AI_${nodeTitle}</span>
+                        <span class="delete-btn" onclick="this.closest('.node').remove()">×</span>
+                    </div>
+                    <div class="node-body" contenteditable="true">
+                        <strong>Feature Type:</strong> Custom Node<br>
+                        <em>Click here to edit descriptions or code strings.</em>
                     </div>
                 `;
+                
                 canvas.appendChild(newNode);
                 document.getElementById('promptInput').value = '';
-            }, 1500);
+                log.innerHTML += `<br>[COMPILER]: Node deployed successfully.`;
+                log.scrollTop = log.scrollHeight;
+            }, 600);
         }
     </script>
 </body>
