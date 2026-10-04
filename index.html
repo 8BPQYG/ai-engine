@@ -1,180 +1,117 @@
-<script>
-    let currentElement = null;
-    let offsetX = 0;
-    let offsetY = 0;
-    let selectedNodeId = 'rootNode';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Orchestrator Engine</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background: #121214; color: #e1e1e6; display: flex; height: 100vh; overflow: hidden; user-select: none; }
+        .sidebar { width: 320px; background: #1a1a1e; border-right: 1px solid #29292e; display: flex; flex-direction: column; }
+        .panel-header { padding: 20px; border-bottom: 1px solid #29292e; }
+        .panel-header h2 { font-size: 1.2rem; color: #00e676; }
+        .ai-status-list { padding: 20px; flex: 1; overflow-y: auto; font-size: 0.9rem; }
+        .ai-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .status-dot { width: 8px; height: 8px; background: #00e676; border-radius: 50%; box-shadow: 0 0 8px #00e676; }
+        .terminal-box { background: #0a0a0c; padding: 15px; border-radius: 6px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; color: #a9a9b3; border: 1px solid #29292e; margin: 20px; }
+        .prompt-container { padding: 20px; border-top: 1px solid #29292e; }
+        textarea { width: 100%; height: 80px; background: #202024; border: 1px solid #29292e; border-radius: 6px; color: #fff; padding: 10px; resize: none; outline: none; }
+        button { width: 100%; padding: 12px; margin-top: 10px; background: #00e676; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .main-viewport { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .engine-bar { height: 50px; background: #1a1a1e; border-bottom: 1px solid #29292e; display: flex; align-items: center; padding: 0 20px; }
+        .canvas-area { flex: 1; background-image: radial-gradient(#29292e 1px, transparent 1px); background-size: 20px 20px; position: relative; }
+        .node { position: absolute; background: #202024; border: 2px solid #00e676; border-radius: 8px; width: 220px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: grab; }
+        .node:active { cursor: grabbing; border-color: #fff; }
+        .node-header { font-size: 0.8rem; font-weight: bold; color: #00e676; background: #1a1a1e; padding: 8px 12px; border-bottom: 1px solid #29292e; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; }
+        .node-body { font-size: 0.85rem; color: #c4c4cc; padding: 12px; }
+        .delete-btn { color: #ef5350; cursor: pointer; }
+    </style>
+</head>
+<body>
 
-    // Keeps track of the custom code inside each engine node block
-    let nodeDataStorage = {
-        'rootNode': '// Core runtime initiation logic\nfunction startEngine() {\n    console.log("Core initialized.");\n}'
-    };
+    <div class="sidebar">
+        <div class="panel-header">
+            <h2>AI ENGINE CORE</h2>
+            <p style="font-size: 0.8rem; color: #7c7c8a;">Multi-Agent Consensus Layer</p>
+        </div>
+        <div class="ai-status-list">
+            <div class="ai-row"><span>OpenAI GPT-4o</span> <div class="status-dot"></div></div>
+            <div class="ai-row"><span>Anthropic Claude 3.5</span> <div class="status-dot"></div></div>
+            <div class="ai-row"><span>Google Gemini 1.5</span> <div class="status-dot"></div></div>
+            <div class="ai-row"><span>DeepSeek R1</span> <div class="status-dot"></div></div>
+            <div class="ai-row"><span>xAI Grok</span> <div class="status-dot"></div></div>
+        </div>
+        <div class="terminal-box" id="terminalLog">[SYSTEM]: Engine ready. Drag nodes or type to manifest modules.</div>
+        <div class="prompt-container">
+            <textarea id="promptInput" placeholder="Describe a new software feature node..."></textarea>
+            <button onclick="triggerEngineOrchestration()">Run Orchestrator</button>
+        </div>
+    </div>
 
-    function startDrag(e, element) {
-        if (
-            e.target.hasAttribute('contenteditable') ||
-            e.target.classList.contains('delete-btn')
-        ) {
-            return;
+    <div class="main-viewport">
+        <div class="engine-bar"><span style="font-weight: bold; font-size: 0.9rem;">Workspace: Active Blueprint Project</span></div>
+        <div class="canvas-area" id="canvasArea">
+            <div class="node" style="top: 150px; left: 150px;" onmousedown="startDrag(event, this)">
+                <div class="node-header"><span>Engine.Core_Main</span></div>
+                <div class="node-body"><strong>Status:</strong> Online<br><strong>Pipeline:</strong> Root Link</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeElement = null, startX = 0, startY = 0;
+
+        function startDrag(e, element) {
+            if (e.target.classList.contains('delete-btn')) return;
+            activeElement = element;
+            startX = e.clientX - element.offsetLeft;
+            startY = e.clientY - element.offsetTop;
+            document.addEventListener('mousemove', dragNode);
+            document.addEventListener('mouseup', stopDrag);
         }
 
-        currentElement = element;
-
-        offsetX = e.clientX - element.getBoundingClientRect().left;
-        offsetY = e.clientY - element.getBoundingClientRect().top;
-
-        // --- INSPECTOR PANEL ACTIVE CONNECTIVITY ---
-        selectedNodeId = element.id || 'rootNode';
-        document.querySelectorAll('.node').forEach(n => n.style.borderColor = '#00e676');
-        element.style.borderColor = '#ffffff'; // White highlight for selected node
-        
-        // Push the clicked node's title and inner code to the right panel
-        document.getElementById('inspectorName').value = element.querySelector('.node-header span').innerText;
-        document.getElementById('inspectorCode').innerText = nodeDataStorage[selectedNodeId] || '// No custom script initialized.';
-        // -------------------------------------------
-
-        document.addEventListener('mousemove', dragEverything);
-        document.addEventListener('mouseup', stopDragEverything);
-    }
-
-    function dragEverything(e) {
-        if (!currentElement) return;
-
-        const container = document
-            .getElementById('canvasArea')
-            .getBoundingClientRect();
-
-        const leftPosition = e.clientX - container.left - offsetX;
-        const topPosition = e.clientY - container.top - offsetY;
-
-        currentElement.style.left = leftPosition + 'px';
-        currentElement.style.top = topPosition + 'px';
-
-        updateConnections();
-    }
-
-    function stopDragEverything() {
-        currentElement = null;
-
-        document.removeEventListener('mousemove', dragEverything);
-        document.removeEventListener('mouseup', stopDragEverything);
-    }
-
-    function triggerEngineOrchestration() {
-        const inputText = document.getElementById('promptInput').value;
-        const log = document.getElementById('terminalLog');
-        const canvas = document.getElementById('canvasArea');
-
-        if (!inputText.trim()) {
-            return alert('Please type a feature component name!');
+        function dragNode(e) {
+            if (!activeElement) return;
+            activeElement.style.left = (e.clientX - startX) + 'px';
+            activeElement.style.top = (e.clientY - startY) + 'px';
         }
 
-        log.innerHTML += `<br><span style="color: #00e676;">[USER]: ${inputText}</span>`;
-        log.innerHTML += `<br>[SYSTEM]: Spawning linked blueprint node...`;
-        log.scrollTop = log.scrollHeight;
+        function stopDrag() {
+            activeElement = null;
+            document.removeEventListener('mousemove', dragNode);
+            document.removeEventListener('mouseup', stopDrag);
+        }
 
-        setTimeout(() => {
-            const nodeId = 'node_' + Date.now();
+        function triggerEngineOrchestration() {
+            const input = document.getElementById('promptInput');
+            const log = document.getElementById('terminalLog');
+            const canvas = document.getElementById('canvasArea');
+            
+            if(!input.value.trim()) return alert("Please type a component name!");
 
-            const newNode = document.createElement('div');
-            newNode.className = 'node';
-            newNode.id = nodeId;
-
-            const randomTop = Math.floor(Math.random() * 250 + 100);
-            const randomLeft = Math.floor(Math.random() * 250 + 400);
-
-            newNode.style.top = randomTop + 'px';
-            newNode.style.left = randomLeft + 'px';
-            newNode.setAttribute('onmousedown', 'startDrag(event, this)');
-
-            const nodeTitle = inputText.length > 15 ? inputText.substring(0, 15) + '...' : inputText;
-
-            newNode.innerHTML = `
-                <div class="node-header">
-                    <span>AI_${nodeTitle}</span>
-                    <span class="delete-btn" onclick="removeNode('${nodeId}')">×</span>
-                </div>
-                <div class="node-body">Pipeline component active.</div>
-            `;
-
-            // Auto-generates starter code for your new node
-            nodeDataStorage[nodeId] = '// AI Compiled Script for ' + inputText + '\nfunction execute' + nodeTitle.replace(/[^a-zA-Z0-9]/g, '') + '() {\n    // System parameters ready\n}';
-
-            canvas.appendChild(newNode);
-            document.getElementById('promptInput').value = '';
-
-            log.innerHTML += `<br>[COMPILER]: Connected to Core pipeline successfully.`;
+            log.innerHTML += `<br><span style="color: #00e676;">[USER]: ${input.value}</span><br>[SYSTEM]: Spawning interactive module...`;
             log.scrollTop = log.scrollHeight;
 
-            updateConnections();
-        }, 500);
-    }
-
-    function updateConnections() {
-        const svg = document.getElementById('lineLayer');
-        const canvas = document.getElementById('canvasArea');
-        const root = document.getElementById('rootNode');
-
-        svg.innerHTML = '';
-
-        if (!root) return;
-
-        const canvasRect = canvas.getBoundingClientRect();
-        const rootRect = root.getBoundingClientRect();
-
-        const startX = rootRect.left - canvasRect.left + rootRect.width;
-        const startY = rootRect.top - canvasRect.top + rootRect.height / 2;
-
-        const targetNodes = document.querySelectorAll('.node:not(#rootNode)');
-
-        targetNodes.forEach(node => {
-            const nodeRect = node.getBoundingClientRect();
-
-            const endX = nodeRect.left - canvasRect.left;
-            const endY = nodeRect.top - canvasRect.top + nodeRect.height / 2;
-
-            const controlOffset = Math.abs(endX - startX) * 0.5;
-
-            const pathData =
-                `M ${startX} ${startY} ` +
-                `C ${startX + controlOffset} ${startY}, ` +
-                `${endX - controlOffset} ${endY}, ` +
-                `${endX} ${endY}`;
-
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-
-            path.setAttribute('d', pathData);
-            path.setAttribute('stroke', '#00e676');
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
-            path.setAttribute('style', 'opacity: 0.65; stroke-dasharray: 4;');
-
-            svg.appendChild(path);
-        });
-    }
-
-    function removeNode(id) {
-        const element = document.getElementById(id);
-
-        if (element) {
-            element.remove();
-            delete nodeDataStorage[id]; // Cleans up the code memory database
-            updateConnections();
+            setTimeout(() => {
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.style.top = Math.floor(Math.random() * 200 + 100) + 'px';
+                node.style.left = Math.floor(Math.random() * 200 + 350) + 'px';
+                node.setAttribute('onmousedown', 'startDrag(event, this)');
+                
+                node.innerHTML = `
+                    <div class="node-header">
+                        <span>AI_${input.value.substring(0, 15)}</span>
+                        <span class="delete-btn" onclick="this.closest('.node').remove()">×</span>
+                    </div>
+                    <div class="node-body"><strong>Module:</strong> Pipeline Link Active.</div>
+                `;
+                canvas.appendChild(node);
+                input.value = '';
+                log.innerHTML += `<br>[COMPILER]: Node deployed.`;
+                log.scrollTop = log.scrollHeight;
+            }, 400);
         }
-    }
-
-    // Connects inspector text typing to update the canvas labels dynamically
-    function updateSelectedNodeName(val) {
-        if (!selectedNodeId) return;
-        const target = document.getElementById(selectedNodeId);
-        if (target) target.querySelector('.node-header span').innerText = val;
-    }
-
-    function updateSelectedNodeCode(val) {
-        if (!selectedNodeId) return;
-        nodeDataStorage[selectedNodeId] = val;
-    }
-
-    window.addEventListener('resize', updateConnections);
-</script>
-
-            
+    </script>
+</body>
+</html>
